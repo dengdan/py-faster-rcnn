@@ -41,10 +41,11 @@ def generate_anchors(base_size=16, ratios=[0.5, 1, 2],
     scales wrt a reference (0, 0, 15, 15) window.
     """
 
-    base_anchor = np.array([1, 1, base_size, base_size]) - 1
-    ratio_anchors = _ratio_enum(base_anchor, ratios)
+    base_anchor = np.array([1, 1, base_size, base_size]) - 1 # an anchor defined by (x1, y1, x2, y2)
+    ratio_anchors = _ratio_enum(base_anchor, ratios)# anchors with the same area with base_anchor, but with different aspact ratio
     anchors = np.vstack([_scale_enum(ratio_anchors[i, :], scales)
-                         for i in xrange(ratio_anchors.shape[0])])
+                         for i in xrange(ratio_anchors.shape[0])]) # anchors with the same aspect ratio with ratio_anchors but different areas.
+    # len(archors) == len(scales) * len(ratios)
     return anchors
 
 def _whctrs(anchor):
@@ -80,8 +81,8 @@ def _ratio_enum(anchor, ratios):
     w, h, x_ctr, y_ctr = _whctrs(anchor)
     size = w * h
     size_ratios = size / ratios
-    ws = np.round(np.sqrt(size_ratios))
-    hs = np.round(ws * ratios)
+    ws = np.round(np.sqrt(size_ratios)) # w = sqrt(w * h / ratio) 
+    hs = np.round(ws * ratios)  # h = w * ratio = sqrt(w * h * ratio)
     anchors = _mkanchors(ws, hs, x_ctr, y_ctr)
     return anchors
 

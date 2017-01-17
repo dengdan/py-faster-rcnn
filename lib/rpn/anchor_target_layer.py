@@ -28,7 +28,7 @@ class AnchorTargetLayer(caffe.Layer):
         anchor_scales = layer_params.get('scales', (8, 16, 32))
         self._anchors = generate_anchors(scales=np.array(anchor_scales))
         self._num_anchors = self._anchors.shape[0]
-        self._feat_stride = layer_params['feat_stride']
+        self._feat_stride = layer_params['feat_stride']#16 = 2**4
 
         if DEBUG:
             print 'anchors:'
@@ -53,8 +53,10 @@ class AnchorTargetLayer(caffe.Layer):
             print 'AnchorTargetLayer: height', height, 'width', width
 
         A = self._num_anchors
+        
+        # reshape is done here and therefore the reshape function is empty.
         # labels
-        top[0].reshape(1, 1, A * height, width)
+        top[0].reshape(1, 1, A * height, width) # batch_size == 1.
         # bbox_targets
         top[1].reshape(1, A * 4, height, width)
         # bbox_inside_weights
@@ -75,7 +77,7 @@ class AnchorTargetLayer(caffe.Layer):
             'Only single item batches are supported'
 
         # map of shape (..., H, W)
-        height, width = bottom[0].data.shape[-2:]
+        height, width = bottom[0].data.shape[-2:] #the image height and width
         # GT boxes (x1, y1, x2, y2, label)
         gt_boxes = bottom[1].data
         # im_info
@@ -92,7 +94,7 @@ class AnchorTargetLayer(caffe.Layer):
         # 1. Generate proposals from bbox deltas and shifted anchors
         shift_x = np.arange(0, width) * self._feat_stride
         shift_y = np.arange(0, height) * self._feat_stride
-        shift_x, shift_y = np.meshgrid(shift_x, shift_y)
+        shift_x, shift_y = np.meshgrid(shift_x, shift_y)# all anchor center points
         shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
                             shift_x.ravel(), shift_y.ravel())).transpose()
         # add A anchors (1, A, 4) to
@@ -102,7 +104,7 @@ class AnchorTargetLayer(caffe.Layer):
         A = self._num_anchors
         K = shifts.shape[0]
         all_anchors = (self._anchors.reshape((1, A, 4)) +
-                       shifts.reshape((1, K, 4)).transpose((1, 0, 2)))
+                       shifts.reshape((1, K, 4)).transpose((1, 0, 2))) # all anchors center at all possible locations
         all_anchors = all_anchors.reshape((K * A, 4))
         total_anchors = int(K * A)
 
@@ -133,7 +135,7 @@ class AnchorTargetLayer(caffe.Layer):
             np.ascontiguousarray(anchors, dtype=np.float),
             np.ascontiguousarray(gt_boxes, dtype=np.float))
         argmax_overlaps = overlaps.argmax(axis=1)
-        max_overlaps = overlaps[np.arange(len(inds_inside)), argmax_overlaps]
+        max_overlaps = overlaps[np.arange(len(inds_inside)), argmax_overlaps]# get the max-overlapped anchors for each gt bbx.
         gt_argmax_overlaps = overlaps.argmax(axis=0)
         gt_max_overlaps = overlaps[gt_argmax_overlaps,
                                    np.arange(overlaps.shape[1])]
@@ -171,13 +173,12 @@ class AnchorTargetLayer(caffe.Layer):
             #print "was %s inds, disabling %s, now %s inds" % (
                 #len(bg_inds), len(disable_inds), np.sum(labels == 0))
 
-        bbox_targets = np.zeros((len(inds_inside), 4), dtype=np.float32)
         bbox_targets = _compute_targets(anchors, gt_boxes[argmax_overlaps, :])
 
         bbox_inside_weights = np.zeros((len(inds_inside), 4), dtype=np.float32)
-        bbox_inside_weights[labels == 1, :] = np.array(cfg.TRAIN.RPN_BBOX_INSIDE_WEIGHTS)
+        bbox_inside_weights[labels == 1, :] = np.array(cfg.TRAIN.RPN_BBOX_INSIDE_WEIGHTS)# p_* in loss function
 
-        bbox_outside_weights = np.zeros((len(inds_inside), 4), dtype=np.float32)
+        bbox_outside_weights = np.zeros((len(inds_inside), 4), dtype=np.float32)# weight for four parts of regression loss
         if cfg.TRAIN.RPN_POSITIVE_WEIGHT < 0:
             # uniform weighting of examples (given non-uniform sampling)
             num_examples = np.sum(labels >= 0)
@@ -187,7 +188,7 @@ class AnchorTargetLayer(caffe.Layer):
             assert ((cfg.TRAIN.RPN_POSITIVE_WEIGHT > 0) &
                     (cfg.TRAIN.RPN_POSITIVE_WEIGHT < 1))
             positive_weights = (cfg.TRAIN.RPN_POSITIVE_WEIGHT /
-                                np.sum(labels == 1))
+                                np.sum(labels == 1))# normalized
             negative_weights = ((1.0 - cfg.TRAIN.RPN_POSITIVE_WEIGHT) /
                                 np.sum(labels == 0))
         bbox_outside_weights[labels == 1, :] = positive_weights
